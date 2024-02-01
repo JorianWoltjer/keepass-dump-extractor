@@ -2,6 +2,14 @@
 name = "keepass-dump-extractor"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jorian Woltjer (J0R1AN)"]
+license = "MIT OR Apache-2.0"
+description = "Find and collect parts of a Keepass master key to recover it in plain text from a memory dump"
+readme = "README.md"
+homepage = "https://github.com/JorianWoltjer/keepass-dump-extractor"
+repository = "https://github.com/JorianWoltjer/keepass-dump-extractor"
+keywords = ["keepass", "cli", "memorydump", "extract", "passwords"]
+categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
