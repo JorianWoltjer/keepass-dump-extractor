@@ -15,7 +15,7 @@ s
 
 This tool finds such strings and **combines them** into one password. Due to noise or retyping in the memory dump it will also print some false positives (especially for earlier characters), but with brute-forcing or a bit of common sense, these should be easy to filter out. 
 
-It differs from existing tools (like [`keepass-password-dumper`](https://github.com/vdohney/keepass-password-dumper) or [`keepass-dump-masterkey`](https://github.com/matro7sh/keepass-dump-masterkey)) in the various useful output formats, and its ability to extract non-ASCII character in UTF16 encoding. If the master key uses Unicode characters like 'ø', this tool will be able to find those too (iykyk). 
+It differs from existing tools (like [`keepass-password-dumper`](https://github.com/vdohney/keepass-password-dumper) or [`keepass-dump-masterkey`](https://github.com/matro7sh/keepass-dump-masterkey)) in speed, the various useful output formats, and its ability to extract non-ASCII character in UTF16 encoding. If the master key uses Unicode characters like 'ø', this tool will be able to find those too (iykyk). 
 
 ## Installation
 
