@@ -2,7 +2,7 @@
 
 **Find and collect parts of a Keepass master key to recover it in plain text from a memory dump**
 
-While typing out the master key to unlock a KeePass database, the value of the input box is stored in memory. While it is visually hidden using '●' characters, the last character was briefly visible in memory, and keeps being stored there ([CVE-2023-3278](https://nvd.nist.gov/vuln/detail/CVE-2023-32784), version < 2.54). That makes it possible to find strings like the following in the memory dump:
+While typing out the master key to unlock a KeePass database, the value of the input box is stored in memory. While it is visually hidden using '●' characters, the last character was briefly visible in memory, and keeps being stored there ([CVE-2023-3278](https://nvd.nist.gov/vuln/detail/CVE-2023-32784), fixed in [KeePass 2.54](https://keepass.info/news/n230603_2.54.html) released June 3rd 2023). That makes it possible to find strings like the following in the memory dump:
 
 ```
 s
