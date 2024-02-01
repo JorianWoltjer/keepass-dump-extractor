@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 
 use cli::Format;
@@ -7,30 +8,22 @@ pub mod cli;
 
 const PREFIX: [u8; 2] = [0xCF, 0x25]; // UTF-16-LE encoded '●' (U+25CF)
                                       // const VALID_CHARS: HashSet<char> =
-lazy_static::lazy_static!(
-    static ref VALID_CHARS: HashSet<char> = {
-        let mut set = HashSet::new();
-        for range in [0x20..=0x7E, 0x0A0..=0x2AF, 0x1E00..=0x1EFF] {
-            set.extend(range.filter_map(char::from_u32));
-        }
-        set
-    };
-);
-
-fn is_valid_char(c: char) -> bool {
-    // let c = c as u32;
-    // (0x20..=0x7E).contains(&c)
-    //     // Latin characters (https://en.wikipedia.org/wiki/Latin_script_in_Unicode)
-    //     || (0x00A0..=0x2AF).contains(&c)
-    //     || (0x1E00..=0x1EFF).contains(&c)
-    VALID_CHARS.contains(&c)
-}
+static VALID_CHARS: Lazy<HashSet<char>> = Lazy::new(|| {
+    let mut set = HashSet::new();
+    for range in [0x20..=0x7E, 0x0A0..=0x2AF, 0x1E00..=0x1EFF] {
+        set.extend(range.filter_map(char::from_u32));
+    }
+    set
+});
+static COMMON_CHARS: Lazy<HashSet<char>> =
+    Lazy::new(|| HashSet::from_iter((0x20..=0x7E).filter_map(char::from_u32)));
 
 pub fn find_leaks(bytes: &[u8]) -> Vec<(usize, char)> {
     let mut results = Vec::new();
     let mut length = 0;
     let mut i = 0;
     while i < bytes.len() - 1 {
+        // Leaks must begin with a series of '●'
         if bytes[i..i + 2] == PREFIX {
             length += 1;
             i += 2;
@@ -40,7 +33,8 @@ pub fn find_leaks(bytes: &[u8]) -> Vec<(usize, char)> {
             if let Some(Ok(c)) =
                 char::decode_utf16([u16::from_le_bytes([bytes[i], bytes[i + 1]])]).next()
             {
-                if is_valid_char(c) && bytes[i + 2..i + 4] == [0x00, 0x00] {
+                // Filter some uncommon characters, and check for null bytes
+                if VALID_CHARS.contains(&c) && bytes[i + 2..i + 4] == [0x00, 0x00] {
                     results.push((length, c));
                     i += 4;
                     continue;
@@ -82,8 +76,31 @@ fn order_by_duplicates(leaks: &[(usize, char)]) -> Vec<(usize, char)> {
     leaks.into_iter().map(|(leak, _)| *leak).collect()
 }
 
+fn get_unknowns_and_knowns(leaks: Vec<(usize, char)>) -> (Vec<HashSet<(usize, char)>>, Vec<char>) {
+    let leaks = group_by_length(leaks);
+    let max_length = *leaks.keys().max().unwrap() + 1;
+
+    let unknowns = (0..max_length)
+        .filter_map(|length| {
+            let chars = leaks.get(&length).cloned().unwrap_or_else(|| {
+                // Insert all common characters if there are no leaks of this length
+                HashSet::from_iter((*COMMON_CHARS).iter().map(|c| (length, *c)))
+            });
+            (chars.len() > 1).then_some(chars)
+        })
+        .collect::<Vec<_>>();
+    let mut password = vec!['●'; max_length];
+    leaks.iter().for_each(|(length, chars)| {
+        if chars.len() == 1 {
+            password[*length] = chars.iter().next().unwrap().1;
+        }
+    });
+    (unknowns, password)
+}
+
 pub fn print_formatted_leaks(leaks: &[(usize, char)], format: cli::Format) {
     match format {
+        // Directly print all hints about the password
         Format::Found => {
             let leaks = order_by_duplicates(leaks);
 
@@ -91,27 +108,34 @@ pub fn print_formatted_leaks(leaks: &[(usize, char)], format: cli::Format) {
                 println!("{}", leak_to_string(leak));
             }
         }
+        // Summarize the hints into the full size, leaving gaps for unknown characters
         Format::Gaps => {
-            todo!()
-        }
-        Format::All => {
-            let leaks = group_by_length(leaks.to_vec());
-            let max_length = *leaks.keys().max().unwrap() + 1;
-            let unknowns = leaks.iter().filter(|(_, chars)| chars.len() > 1);
-            let knowns = leaks
-                .iter()
-                .filter(|&(_, chars)| (chars.len() == 1))
-                .map(|(_, chars)| chars.iter().next().unwrap());
-            for perm in unknowns.map(|(_, set)| set).multi_cartesian_product() {
-                let mut password = vec!['●'; max_length];
-                for (length, c) in perm {
-                    password[*length] = *c;
+            let (unknowns, password) = get_unknowns_and_knowns(leaks.to_vec());
+
+            for unknown in unknowns {
+                // TODO: maybe sort here
+                for (length, c) in unknown {
+                    let mut password = password.clone();
+                    password[length] = c;
+                    println!("{}", password.iter().collect::<String>());
                 }
-                for (length, c) in knowns.clone() {
+            }
+        }
+        // Print all possible permutations of the password
+        Format::All => {
+            let (unknowns, mut password) = get_unknowns_and_knowns(leaks.to_vec());
+
+            for perm in unknowns.iter().multi_cartesian_product() {
+                for (length, c) in perm {
+                    // No need to clone because next iteration will overwrite everything
                     password[*length] = *c;
                 }
                 println!("{}", password.iter().collect::<String>());
             }
+        }
+        // Write the raw results with all found information, not intended for human consumption
+        Format::Raw => {
+            todo!("Write count, length and char");
         }
     }
 }

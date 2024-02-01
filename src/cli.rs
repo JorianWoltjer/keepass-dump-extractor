@@ -21,4 +21,6 @@ pub enum Format {
     Gaps,
     /// Print all possible permutations of the password
     All,
+    /// Write the raw results with all found information, not intended for human consumption
+    Raw,
 }

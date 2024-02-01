@@ -1,3 +1,5 @@
 /target
 *.dmp
 *.DMP
+*.hash
+wordlist.txt
