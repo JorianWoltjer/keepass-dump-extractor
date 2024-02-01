@@ -19,8 +19,9 @@ pub enum Format {
     Found,
     /// Summarize the hints into the full size, leaving gaps for unknown characters
     Gaps,
-    /// Print all possible permutations of the password
+    /// Print all possible permutations of the password, intended as a wordlist
     All,
-    /// Write the raw results with all found information, not intended for human consumption
+    /// Write the raw results with all found information, intended for further processing
+    /// (count, position, character)
     Raw,
 }

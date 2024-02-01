@@ -15,8 +15,8 @@ static VALID_CHARS: Lazy<HashSet<char>> = Lazy::new(|| {
     }
     set
 });
-static COMMON_CHARS: Lazy<HashSet<char>> =
-    Lazy::new(|| HashSet::from_iter((0x20..=0x7E).filter_map(char::from_u32)));
+static COMMON_CHARS: Lazy<Vec<char>> =
+    Lazy::new(|| (0x20..=0x7E).filter_map(char::from_u32).collect());
 
 pub fn find_leaks(bytes: &[u8]) -> Vec<(usize, char)> {
     let mut results = Vec::new();
@@ -48,43 +48,53 @@ pub fn find_leaks(bytes: &[u8]) -> Vec<(usize, char)> {
     results
 }
 
-fn leak_to_string((length, c): (usize, char)) -> String {
-    format!("{}{}", "●".repeat(length), c)
-}
-
-fn group_by_length(leaks: Vec<(usize, char)>) -> HashMap<usize, HashSet<(usize, char)>> {
+fn group_by_length(leaks: Vec<(usize, char)>) -> HashMap<usize, Vec<(usize, char)>> {
     let mut map = HashMap::new();
     for leak in leaks {
-        map.entry(leak.0).or_insert(HashSet::new()).insert(leak);
+        map.entry(leak.0).or_insert(vec![]).push(leak);
+    }
+
+    map
+}
+
+fn count_duplicates(leaks: &[(usize, char)]) -> HashMap<(usize, char), usize> {
+    let mut map = HashMap::new();
+    for leak in leaks {
+        map.entry(*leak).or_insert(0);
+        *map.get_mut(leak).unwrap() += 1;
     }
 
     map
 }
 
 fn order_by_duplicates(leaks: &[(usize, char)]) -> Vec<(usize, char)> {
-    let mut map = HashMap::new();
-    for leak in leaks {
-        map.entry(leak).or_insert(0);
-        *map.get_mut(&leak).unwrap() += 1;
-    }
+    let map = count_duplicates(leaks);
 
     let mut leaks = map.into_iter().collect::<Vec<_>>();
     leaks.sort_by(|((a1, _), a2), ((b1, _), b2)| match a1.cmp(b1) {
         std::cmp::Ordering::Equal => a2.cmp(b2).reverse(),
         other => other,
     });
-    leaks.into_iter().map(|(leak, _)| *leak).collect()
+    leaks.into_iter().map(|(leak, _)| leak).collect()
 }
 
-fn get_unknowns_and_knowns(leaks: Vec<(usize, char)>) -> (Vec<HashSet<(usize, char)>>, Vec<char>) {
+fn get_unknowns_and_knowns(
+    leaks: Vec<(usize, char)>,
+    insert_common: bool,
+) -> (Vec<Vec<(usize, char)>>, Vec<char>) {
+    let leaks = order_by_duplicates(&leaks);
     let leaks = group_by_length(leaks);
     let max_length = *leaks.keys().max().unwrap() + 1;
 
     let unknowns = (0..max_length)
         .filter_map(|length| {
             let chars = leaks.get(&length).cloned().unwrap_or_else(|| {
-                // Insert all common characters if there are no leaks of this length
-                HashSet::from_iter((*COMMON_CHARS).iter().map(|c| (length, *c)))
+                if insert_common {
+                    // Insert all common characters if there are no leaks of this length
+                    COMMON_CHARS.iter().map(|&c| (length, c)).collect()
+                } else {
+                    vec![]
+                }
             });
             (chars.len() > 1).then_some(chars)
         })
@@ -104,16 +114,15 @@ pub fn print_formatted_leaks(leaks: &[(usize, char)], format: cli::Format) {
         Format::Found => {
             let leaks = order_by_duplicates(leaks);
 
-            for leak in leaks {
-                println!("{}", leak_to_string(leak));
+            for (length, c) in leaks {
+                println!("{}{}", "●".repeat(length), c);
             }
         }
         // Summarize the hints into the full size, leaving gaps for unknown characters
         Format::Gaps => {
-            let (unknowns, password) = get_unknowns_and_knowns(leaks.to_vec());
+            let (unknowns, password) = get_unknowns_and_knowns(leaks.to_vec(), false);
 
             for unknown in unknowns {
-                // TODO: maybe sort here
                 for (length, c) in unknown {
                     let mut password = password.clone();
                     password[length] = c;
@@ -123,7 +132,7 @@ pub fn print_formatted_leaks(leaks: &[(usize, char)], format: cli::Format) {
         }
         // Print all possible permutations of the password
         Format::All => {
-            let (unknowns, mut password) = get_unknowns_and_knowns(leaks.to_vec());
+            let (unknowns, mut password) = get_unknowns_and_knowns(leaks.to_vec(), true);
 
             for perm in unknowns.iter().multi_cartesian_product() {
                 for (length, c) in perm {
@@ -135,7 +144,13 @@ pub fn print_formatted_leaks(leaks: &[(usize, char)], format: cli::Format) {
         }
         // Write the raw results with all found information, not intended for human consumption
         Format::Raw => {
-            todo!("Write count, length and char");
+            let map = count_duplicates(leaks);
+            let mut leaks = map.into_iter().collect::<Vec<_>>();
+            leaks.sort_by(|((a1, _), _), ((b1, _), _)| a1.cmp(b1));
+
+            for ((length, c), count) in leaks {
+                println!("{count}\t{length}\t{c}");
+            }
         }
     }
 }
@@ -161,11 +176,5 @@ mod tests {
         let input = hex!("cf25cf25cf25cf2553010000");
 
         assert_eq!(find_leaks(&input), vec![(4, 'œ')]);
-    }
-
-    #[test]
-    fn format() {
-        assert_eq!(leak_to_string((3, 'g')), "●●●g");
-        assert_eq!(leak_to_string((1, 'g')), "●g");
     }
 }
