@@ -30,7 +30,7 @@ Or **download** and **extract** a pre-compiled binary from the [Releases](https:
 This attack requires a memory dump of the KeePass process and can generate all possible master keys to unlock the KeePass database file (`.kdbx`). With the following commands, you can generate a wordlist, extract the hash from the database, and crack it with the wordlist:
 
 ```bash
-keepass-dump-extractor KeePassDumpFull.dmp -f all > wordlist.txt
+keepass-dump-extractor KeePass.DMP -f all > wordlist.txt
 
 keepass2john passwords.kdbx > passwords.kdbx.hash
 hashcat -m 13400 --username passwords.kdbx.hash wordlist.txt
@@ -100,3 +100,15 @@ For example:
 10	4	e
 10	5	t
 ```
+
+## Testing
+
+To test out this tool and create your own memory dump, install a version of KeePass < 2.54, like [2.53](https://sourceforge.net/projects/keepass/files/KeePass%202.x/2.53/). When installed, open the program and create and save a database in the `.kdbx` format. 
+
+Then to setup the memory dump, we will close and re-open the database file which will prompt for a password. Here, type out the master key you set for the database and unlock it. From here you can lock it again if you want to. 
+
+After this, we can generate the memory dump of the KeePass.exe process using Task Manager. This is done by right-clicking it and choosing "Create dump file":
+
+![Screenshot showing "Create dump file" context option in Task Manager on the KeePass process](https://github.com/JorianWoltjer/keepass-dump-extractor/assets/26067369/d379fe58-3509-418a-9db2-15216c059269)
+
+After this is done, you can open the file location and run this tool over it for analysis.
